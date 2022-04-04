@@ -2,12 +2,11 @@ import os
 import datetime
 import jwt
 from flask import (
-    Flask,
     request,
     jsonify,
 )
 from flask_sqlalchemy import SQLAlchemy
-from database import (
+from cas.database import (
     recreate_database,
     session,
     User,
@@ -16,7 +15,7 @@ from database import (
     ConversationUser,
     ConversationMessage,
 )
-from utils import (
+from cas.utils import (
     email_validator,
     token_required,
     app,
