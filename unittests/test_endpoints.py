@@ -23,10 +23,8 @@ class Endpoints(BaseUnittest):
                 "key_word": "testing"
             })
             res = register()
-            return_statement = res[0].json.get("success")
             self.assertEqual(type(res), tuple)
             self.assertEqual(len(res), 2)
-            self.assertEqual(res[0].json.get("success"), return_statement)
             self.assertEqual(res[0].status_code, 200)
             self.assertEqual(res[1], 200)
 
@@ -37,46 +35,32 @@ class Endpoints(BaseUnittest):
                 "key_word": "testing"
             })
             res = register()
-            return_statement = res[0].json.get("error")
             self.assertEqual(type(res), tuple)
             self.assertEqual(len(res), 2)
-            self.assertEqual(res[0].json.get("error"), return_statement)
             self.assertEqual(res[0].status_code, 200)
             self.assertEqual(res[1], 400)
 
     def test_login_pass(self):
+        with Session.begin() as session:
+            user = create_user(session)
+            nick_name = user.nick_name
+            email = user.email
+            word = user.key_word
         with app.test_client() as client_test:
             client_test.post('/login', json={
-                "nick_name": "Pero", "email": "pero.peric@gmail.com"})
-            with Session.begin() as session:
-                create_user(session)
-            res = login()
-            token = res[0].json.get("token")
+                "nick_name": nick_name, "email": email, "key_word": word})
+            res = register()
             self.assertEqual(type(res), tuple)
             self.assertEqual(len(res), 2)
-            self.assertEqual(res[0].json.get("token"), token)
             self.assertEqual(res[0].status_code, 200)
-            self.assertEqual(res[1], 200)
 
     def test_login_fail(self):
+        with Session.begin() as session:
+            create_user(session, email="marko@gmail.com")
         with app.test_client() as client_test:
-            client_test.post('/login', json={
+            res = client_test.post('/login', json={
                 "nick_name": "Pero", "email": "pero.peric@gmail.com"})
-            with Session.begin() as session:
-                create_user(session, email="marko@gmail.com")
-            res = login()
-            return_statement = res[0].json.get("error")
-            self.assertEqual(type(res), tuple)
-            self.assertEqual(len(res), 2)
-            self.assertEqual(res[0].json.get("error"), return_statement)
-            self.assertEqual(res[0].status_code, 200)
-            self.assertEqual(res[1], 400)
-
-    # def get_user_pass(self):
-    #     with app.test_client() as client_test:
-    #         id = 1
-    #         client_test.get(f'/user/{id}')
-    #     res = get_user(id)
+            self.assertEqual(res.status_code, 400)
 
 
 if __name__ == '__main__':

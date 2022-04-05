@@ -19,6 +19,7 @@ class BaseUnittest(TestCase):
 
 def create_user(session: Session, name="Pero", email="pero.peric@gmail.com",
                 key_word="testing"):
-    user = session.add(User(nick_name=name, email=email, key_word=key_word))
+    user = User(nick_name=name, email=email, key_word=key_word)
+    session.add(user)
     session.flush()
     return user
