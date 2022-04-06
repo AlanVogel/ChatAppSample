@@ -81,3 +81,44 @@ class ConversationMessage(Base):
     # Relationships
     message = relationship("Message", foreign_keys=[message_id])
     conversation = relationship("Conversation", foreign_keys=[conversation_id])
+
+
+def add_user(session: Session, data):
+    session.add(User(nick_name=data.get('nick_name'), email=data.get('email'),
+                     key_word=data.get('key_word')))
+    session.commit()
+
+
+def get_user_by_id(session: Session, id_: int) -> User:
+    return session.query(User).filter(User.id == id_).first()
+
+
+def get_user_by_email(session: Session, email: str) -> User:
+    return session.query(User).filter(User.email == email).first()
+
+
+def update_user(session: Session, user_: User, **kwargs):
+    return session.query(User).filter(User.id == user_.id).update(kwargs)
+
+
+def get_all_users(session: Session) -> User:
+    return session.query(User).all()
+
+
+def add_message(session: Session, data, created_at):
+    session.add(Message(msg=data.get('msg'), created_at=created_at,
+                        sender_id=data.get('sender_id')))
+    session.commit()
+
+
+def get_message_by_id(session: Session, id_: int) -> Message:
+    return session.query(Message).filter(Message.id == id_).first()
+
+
+def add_conversation(session: Session, data):
+    session.add(Conversation(conversation_name=data.get('conversation_name')))
+    session.commit()
+
+
+def get_conversation_by_id(session: Session, id_: int) -> Conversation:
+    return session.query(Conversation).filter(Conversation.id == id_).first()
