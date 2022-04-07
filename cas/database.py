@@ -6,6 +6,7 @@ from sqlalchemy import (
     TIMESTAMP,
     create_engine,
     ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import (
     relationship,
@@ -32,6 +33,7 @@ class User(Base):
     nick_name = Column(String(32), nullable=False)
     email = Column(String(32), nullable=False)
     key_word = Column(String(32), nullable=False)
+    UniqueConstraint(nick_name, email)
 
     def __repr__(self):
         return "<User(nick_name='{}', email='{}', key_word={})>" \
@@ -63,7 +65,7 @@ class ConversationUser(Base):
     __tablename__ = "user_conversations"
     id = Column(Integer, primary_key=True)
     # Foreign keys
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     conversation_id = Column(Integer, ForeignKey("conversations.id",
                                                  ondelete="CASCADE"))
     # Relationships
