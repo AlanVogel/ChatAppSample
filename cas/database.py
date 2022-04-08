@@ -31,8 +31,9 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
     nick_name = Column(String(32), nullable=False)
+    password = Column(String(32), nullable=False)
     email = Column(String(32), nullable=False)
-    key_word = Column(String(32), nullable=False)
+    key_word = Column(String(64), nullable=True)
     UniqueConstraint(nick_name, email)
 
     def __repr__(self):
