@@ -8,9 +8,13 @@ from email_validator import (
 )
 
 
-class RegisterUser(BaseModel):
-    nick_name: str
+class Login(BaseModel):
     email: str
+    password: str
+
+
+class RegisterUserCheck(Login):
+    nick_name: str
 
     @validator("email")
     def is_email_valid(cls, email):
@@ -20,10 +24,10 @@ class RegisterUser(BaseModel):
             raise ValueError(f"{email} is not a valid email: {e}")
 
 
-class Message(RegisterUser):
+class MessageCheck(RegisterUserCheck):
     sender_id: int
     message: str
 
 
-class Conversation(RegisterUser):
+class ConversationCheck(RegisterUserCheck):
     conversation_name: str
