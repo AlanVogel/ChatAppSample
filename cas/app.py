@@ -14,11 +14,19 @@ from cas.database import (
     ConversationUser,
     ConversationMessage,
     Session,
+    update_user,
 )
 from cas.utils import (
-    email_validator,
     token_required,
     app,
+    random_string,
+    encode_security_token,
+    decode_security_token,
+    ok_response,
+    error_response,
+)
+from validation import (
+    RegisterUserCheck,
 )
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
@@ -31,41 +39,43 @@ recreate_database()
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
-    if email_validator(data.get('email')):
+    if RegisterUserCheck(**data):
         with Session.begin() as session:
             session.add(
-                User(nick_name=data.get('nick_name'), email=data.get('email'),
-                     key_word=data.get('key_word')))
+                User(nick_name=data.get('nick_name'),
+                     password=data.get('password'), email=data.get('email')))
             session.commit()
-        return jsonify({'success': 'User created!'}), 200
+        return ok_response(message='User created!', **data)
     return jsonify({'error': 'wrong email, try again!'}), 400
 
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    with Session.begin() as session:
-        user = session.query(User).filter(
-            User.email == data.get('email')).first()
-        user_name = user.nick_name
-    if user_name:
-        token = jwt.encode({'user': user_name,
-                            'exp': datetime.datetime.utcnow() + \
-                                   datetime.timedelta(
-                                       minutes=15)}, app.config['SECRET_KEY'])
-        header_data = jwt.get_unverified_header(token)
-        return jsonify({'decoded_token': jwt.decode(token,
-                                                    app.config['SECRET_KEY'],
-                                                    algorithms=header_data[
-                                                        'alg']),
-                        'token': token}), 200
-    return jsonify({'error': 'user does no exist!'}), 400
+    try:
+        data = request.get_json()
+        with Session.begin() as session:
+            user = session.query(User).filter(
+                User.email == data.get('email')).first()
+            if not user:
+                return error_response(message='user does no exist!',
+                                      status_code=404)
+            user_id = user.id
+            user_name = user.nick_name
+            key_word = random_string(64)
+            update_user(session, user, key_word=key_word)
+            token = encode_security_token(user_id, user_name, key_word)
+            session.commit()
+    except BaseException as ex:
+        print(ex)
+        return error_response(message='something went wrong!', status_code=500)
+    return ok_response(message='Success!', **{
+        'data': {'Authorization': token, 'user_id': user_id}})
 
 
 @app.route('/chat', methods=['POST'])
-@token_required
 def chat():
     data = request.get_json()
+    # request.headers.get()
     date = datetime.datetime.utcnow()
     with Session.begin() as session:
         user = session.query(User).filter(
@@ -91,12 +101,14 @@ def chat():
 def get_user(id):
     with Session.begin() as session:
         user = session.query(User).filter(User.id == id).first()
-    # del user.__dict__['_sa_instance_state']
-    # return jsonify(user.__dict__), 200
-    return jsonify({'id': user.id,
-                    'nick_name': user.nick_name,
-                    'email': user.email,
-                    'key_word': user.key_word})
+        user_id = user.id
+        user_name = user.nick_name
+        user_pass = user.password
+        user_email = user.email
+        user_key = user.key_word
+    return ok_response(message='Success!', **{
+        'data': {'id': user_id, 'nick_name': user_name, 'password': user_pass,
+                 'email': user_email, 'key_word': user_key}})
 
 
 if __name__ == '__main__':
