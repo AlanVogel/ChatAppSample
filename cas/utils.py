@@ -3,12 +3,16 @@ import json
 import random
 import string
 from datetime import datetime
+from functools import wraps
 from flask import (
     Flask,
     request,
     jsonify,
 )
-from functools import wraps
+from cas.database import (
+    User,
+    Session,
+)
 
 app = Flask(__name__)
 
@@ -88,18 +92,32 @@ def error_response(message, status_code):
     return jsonify({"info": {'data': data}, "status_code": status_code})
 
 
-def token_required(f):
+def authorization(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.args.get('token')
-        if not token:
-            return jsonify({'message': 'Token is missing!'}), 400
+        header = request.headers.get('user_id')
+        with Session.begin() as session:
+            user = session.query(User).filter(
+                User.id == header).first()
+            if not user:
+                return error_response(message='user does no exist!',
+                                      status_code=404)
+            user_id = user.id
+            user_name = user.nick_name
+            key_word = user.key_word
+            token = encode_security_token(user_id, user_name, key_word)
+            if not token:
+                return error_response(message='Token does not exist!',
+                                      status_code=404)
+            session.commit()
         try:
-            header_data = jwt.get_unverified_header(token)
-            data = jwt.decode(token, app.config['SECRET_KEY'],
-                              algorithms=header_data['alg'])
+            dec_token = decode_security_token(token, key_word)
+            return f(*args, **kwargs)
+            # return ok_response(message='Authorization is ok!', **{
+            #     'Authorization': {"user_id": dec_token.get('user_id'),
+            #                       "nick_name": dec_token.get('nick_name')}})
         except:
-            return jsonify({'message': 'Token is invalid!'}), 400
-        return f(*args, **kwargs)
-
+            return error_response(message='Authorization failed!',
+                                  status_code=404)
+        # return f(*args, **kwargs)
     return decorated

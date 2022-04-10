@@ -3,6 +3,7 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
+    Boolean,
     TIMESTAMP,
     create_engine,
     ForeignKey,
@@ -60,6 +61,8 @@ class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True)
     conversation_name = Column(String(32), nullable=False)
+    joined = Column(Boolean, default=False, nullable=False)
+    UniqueConstraint(conversation_name, joined)
 
 
 class ConversationUser(Base):
@@ -104,6 +107,11 @@ def update_user(session: Session, user_: User, **kwargs):
     return session.query(User).filter(User.id == user_.id).update(kwargs)
 
 
+def update_conversation(session: Session, conv_: Conversation, **kwargs):
+    return session.query(Conversation).filter(
+        Conversation.id == conv_.id).update(kwargs)
+
+
 def get_all_users(session: Session) -> User:
     return session.query(User).all()
 
@@ -124,4 +132,12 @@ def add_conversation(session: Session, data):
 
 
 def get_conversation_by_id(session: Session, id_: int) -> Conversation:
-    return session.query(Conversation).filter(Conversation.id == id_).first()
+    return session.query(Conversation).filter(Conversation.id == id_).all()
+
+
+def delete_conversation_by_id(session: Session, id_: int):
+    return session.query(Conversation).filter(Conversation.id == id_).delete()
+
+
+def delete_message_by_id(session: Session, id_: int):
+    return session.query(Message).filter(Message.id == id_).delete()

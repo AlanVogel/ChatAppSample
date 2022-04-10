@@ -1,9 +1,7 @@
 import os
 import datetime
-import jwt
 from flask import (
     request,
-    jsonify,
 )
 from flask_sqlalchemy import SQLAlchemy
 from cas.database import (
@@ -15,18 +13,25 @@ from cas.database import (
     ConversationMessage,
     Session,
     update_user,
+    update_conversation,
+    get_conversation_by_id,
+    delete_message_by_id,
+    delete_conversation_by_id,
 )
 from cas.utils import (
-    token_required,
+    authorization,
     app,
     random_string,
     encode_security_token,
-    decode_security_token,
     ok_response,
     error_response,
+    now,
 )
 from validation import (
     RegisterUserCheck,
+    RoomCheck,
+    RoomJoinLeave,
+    MessageCheck,
 )
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
@@ -46,7 +51,7 @@ def register():
                      password=data.get('password'), email=data.get('email')))
             session.commit()
         return ok_response(message='User created!', **data)
-    return jsonify({'error': 'wrong email, try again!'}), 400
+    return error_response(message='Wrong email', status_code=400)
 
 
 @app.route('/login', methods=['POST'])
@@ -72,31 +77,6 @@ def login():
         'data': {'Authorization': token, 'user_id': user_id}})
 
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    data = request.get_json()
-    # request.headers.get()
-    date = datetime.datetime.utcnow()
-    with Session.begin() as session:
-        user = session.query(User).filter(
-            User.nick_name == data.get('nick_name')).first()
-        session.add(Message(msg=data.get('msg'), created_at=date,
-                            sender_id=user.id))
-        session.add(
-            Conversation(conversation_name=data.get('conversation_name')))
-        conversation_user = session.query(Conversation).filter(
-            Conversation.conversation_name == data.get(
-                'conversation_name')).first()
-        session.add(ConversationUser(user_id=user.id,
-                                     conversation_id=conversation_user.id))
-        message = session.query(Message).filter(
-            Message.msg == data.get('msg')).first()
-        session.add(ConversationMessage(conversation_id=conversation_user.id,
-                                        message_id=message.id))
-        session.commit()
-    return jsonify({'success': 'Chat created!'}), 200
-
-
 @app.route('/user/<int:id>', methods=['GET'])
 def get_user(id):
     with Session.begin() as session:
@@ -109,6 +89,142 @@ def get_user(id):
     return ok_response(message='Success!', **{
         'data': {'id': user_id, 'nick_name': user_name, 'password': user_pass,
                  'email': user_email, 'key_word': user_key}})
+
+
+@app.route('/create_room', methods=['POST'])
+@authorization
+def create_room():
+    data = request.get_json()
+    if RoomCheck(**data):
+        with Session.begin() as session:
+            session.add(
+                Conversation(conversation_name=data.get('room_name')))
+            user = session.query(User).filter(
+                User.nick_name == data.get('nick_name')).first()
+            conversation = session.query(Conversation).filter(
+                Conversation.conversation_name == data.get(
+                    'room_name')).first()
+            session.add(ConversationUser(user_id=user.id,
+                                         conversation_id=conversation.id))
+            session.commit()
+        return ok_response(message='Room created', **{
+            'req': {'user': data, 'header': request.headers.get('user_id')}})
+
+
+@app.route('/join_room', methods=['POST'])
+def join_room():
+    data = request.get_json()
+    if RoomJoinLeave(**data):
+        with Session.begin() as session:
+            user = session.query(User).filter(
+                User.nick_name == data.get('nick_name')).first()
+            conv_user = session.query(ConversationUser).filter(
+                ConversationUser.user_id == user.id).first()
+            if not conv_user:
+                return error_response(
+                    message=f'conversation for user {user.nick_name} does no '
+                            f'exist!',
+                    status_code=404)
+            conversation = session.query(Conversation).filter(
+                Conversation.conversation_name == data.get(
+                    'room_name')).first()
+            if conversation.joined:
+                return error_response(message='You are already joined',
+                                      status_code=400)
+            update_conversation(session, conversation, joined=True)
+            session.commit()
+        return ok_response(
+            message=f'You joined the room: {data.get("room_name")}', **data)
+
+
+@app.route('/leave_room', methods=['POST'])
+def leave_room():
+    data = request.get_json()
+    if RoomJoinLeave(**data):
+        with Session.begin() as session:
+            user = session.query(User).filter(
+                User.nick_name == data.get('nick_name')).first()
+            conv_user = session.query(ConversationUser).filter(
+                ConversationUser.user_id == user.id).first()
+            if not conv_user:
+                return error_response(
+                    message=f'conversation for user {user.nick_name} does no '
+                            f'exist!',
+                    status_code=404)
+            conversation = session.query(Conversation).filter(
+                Conversation.conversation_name == data.get(
+                    'room_name')).first()
+            if not conversation.joined:
+                return error_response(message='You are already leaved',
+                                      status_code=400)
+            update_conversation(session, conversation, joined=False)
+            session.commit()
+        return ok_response(
+            message=f'You leaved the room: {data.get("room_name")}', **data)
+
+
+@app.route('/send_msg', methods=['POST'])
+def send_msg():
+    data = request.get_json()
+    if MessageCheck(**data):
+        with Session.begin() as session:
+            user = session.query(User).filter(
+                User.nick_name == data.get('nick_name')).first()
+            conv = session.query(Conversation).filter(
+                Conversation.conversation_name == data.get(
+                    "room_name")).first()
+            if not conv.joined:
+                return error_response(
+                    message='You are not joined to the conversation',
+                    status_code=404)
+            session.add(Message(msg=data.get('msg'), created_at=now(),
+                                sender_id=user.id))
+            msg = session.query(Message).filter(
+                Message.msg == data.get('msg')).first()
+            session.add(ConversationMessage(conversation_id=conv.id,
+                                            message_id=msg.id))
+            session.commit()
+        return ok_response(message='message is successfully send!', **data)
+    return error_response(message='something went wrong!', status_code=500)
+
+
+@app.route('/list_con/<int:id>', methods=['GET'])
+def lst_of_conversation(id):
+    with Session.begin() as session:
+        user = session.query(User).filter(User.id == id).first()
+        user_id = user.id
+        conv_user = session.query(ConversationUser).filter(
+            ConversationUser.user_id == user_id).all()
+        conv_user_id = conv_user.id
+        lst_conv = get_conversation_by_id(session, conv_user_id)
+        return ok_response(message='Success!', **{
+            'conversation_data': {'room': lst_conv.conversation_name}})
+
+
+@app.route('/delete_con/<int:id>', methods=['DELETE'])
+def delete_conversation(id):
+    with Session.begin() as session:
+        user = session.query(User).filter(User.id == id).first()
+        user_id = user.id
+        conv_user = session.query(ConversationUser).filter(
+            ConversationUser.user_id == user_id).first()
+        conv_user_id = conv_user.id
+        delete_conversation_by_id(session, conv_user_id)
+        session.commit()
+        return ok_response(message='Conversation deleted!')
+
+
+@app.route('/delete_msg/<int:id>', methods=['DELETE'])
+def delete_message(id):
+    with Session.begin() as session:
+        user = session.query(User).filter(User.id == id).first()
+        user_id = user.id
+        msg = session.query(Message).filter(
+            Message.sender_id == user_id).first()
+        msg_id = msg.id
+        delete_message_by_id(session, msg_id)
+        session.commit()
+        return ok_response(message='Message deleted!')
 
 
 if __name__ == '__main__':
