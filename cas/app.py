@@ -190,15 +190,17 @@ def send_msg():
 
 @app.route('/list_con/<int:id>', methods=['GET'])
 def lst_of_conversation(id):
+    conv_data = {}
     with Session.begin() as session:
         user = session.query(User).filter(User.id == id).first()
         user_id = user.id
         conv_user = session.query(ConversationUser).filter(
             ConversationUser.user_id == user_id).all()
-        conv_user_id = conv_user.id
-        lst_conv = get_conversation_by_id(session, conv_user_id)
+        for all_con in conv_user:
+            conv_data['Room {0}'.format(
+                all_con.id)] = all_con.conversation.conversation_name
         return ok_response(message='Success!', **{
-            'conversation_data': {'room': lst_conv.conversation_name}})
+            'conversation_data': {'rooms': conv_data}})
 
 
 @app.route('/delete_con/<int:id>', methods=['DELETE'])
