@@ -12,6 +12,7 @@ from flask import (
 from cas.database import (
     User,
     Session,
+    update_user,
 )
 
 app = Flask(__name__)
@@ -105,6 +106,9 @@ def authorization(f):
             user_id = user.id
             user_name = user.nick_name
             key_word = user.key_word
+            if not key_word:
+                key_word = random_string(64)
+                update_user(session, user, key_word=key_word)
             token = encode_security_token(user_id, user_name, key_word)
             if not token:
                 return error_response(message='Token does not exist!',
@@ -113,11 +117,7 @@ def authorization(f):
         try:
             dec_token = decode_security_token(token, key_word)
             return f(*args, **kwargs)
-            # return ok_response(message='Authorization is ok!', **{
-            #     'Authorization': {"user_id": dec_token.get('user_id'),
-            #                       "nick_name": dec_token.get('nick_name')}})
         except:
             return error_response(message='Authorization failed!',
                                   status_code=404)
-        # return f(*args, **kwargs)
     return decorated

@@ -14,7 +14,6 @@ from cas.database import (
     Session,
     update_user,
     update_conversation,
-    get_conversation_by_id,
     delete_message_by_id,
     delete_conversation_by_id,
 )
@@ -78,6 +77,7 @@ def login():
 
 
 @app.route('/user/<int:id>', methods=['GET'])
+@authorization
 def get_user(id):
     with Session.begin() as session:
         user = session.query(User).filter(User.id == id).first()
@@ -112,6 +112,7 @@ def create_room():
 
 
 @app.route('/join_room', methods=['POST'])
+@authorization
 def join_room():
     data = request.get_json()
     if RoomJoinLeave(**data):
@@ -138,6 +139,7 @@ def join_room():
 
 
 @app.route('/leave_room', methods=['POST'])
+@authorization
 def leave_room():
     data = request.get_json()
     if RoomJoinLeave(**data):
@@ -164,6 +166,7 @@ def leave_room():
 
 
 @app.route('/send_msg', methods=['POST'])
+@authorization
 def send_msg():
     data = request.get_json()
     if MessageCheck(**data):
@@ -189,7 +192,8 @@ def send_msg():
 
 
 @app.route('/list_con/<int:id>', methods=['GET'])
-def lst_of_conversation(id):
+@authorization
+def lst_of_conversations(id):
     conv_data = {}
     with Session.begin() as session:
         user = session.query(User).filter(User.id == id).first()
@@ -204,6 +208,7 @@ def lst_of_conversation(id):
 
 
 @app.route('/delete_con/<int:id>', methods=['DELETE'])
+@authorization
 def delete_conversation(id):
     with Session.begin() as session:
         user = session.query(User).filter(User.id == id).first()
@@ -217,6 +222,7 @@ def delete_conversation(id):
 
 
 @app.route('/delete_msg/<int:id>', methods=['DELETE'])
+@authorization
 def delete_message(id):
     with Session.begin() as session:
         user = session.query(User).filter(User.id == id).first()
