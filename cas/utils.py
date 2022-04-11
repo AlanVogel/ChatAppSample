@@ -1,5 +1,4 @@
 import jwt
-import json
 import random
 import string
 from datetime import datetime
@@ -10,9 +9,9 @@ from flask import (
     jsonify,
 )
 from cas.database import (
-    User,
     Session,
     update_user,
+    get_user_by_id,
 )
 
 app = Flask(__name__)
@@ -96,10 +95,9 @@ def error_response(message, status_code):
 def authorization(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        header = request.headers.get('user_id')
+        header = int(request.headers.get('user_id'))
         with Session.begin() as session:
-            user = session.query(User).filter(
-                User.id == header).first()
+            user = get_user_by_id(session, header)
             if not user:
                 return error_response(message='user does no exist!',
                                       status_code=404)
@@ -115,9 +113,9 @@ def authorization(f):
                                       status_code=404)
             session.commit()
         try:
-            dec_token = decode_security_token(token, key_word)
+            decode_security_token(token, key_word)
             return f(*args, **kwargs)
         except:
-            return error_response(message='Authorization failed!',
-                                  status_code=404)
+            return error_response(message='Something went wrong',
+                                  status_code=400)
     return decorated

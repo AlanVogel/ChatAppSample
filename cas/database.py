@@ -38,8 +38,9 @@ class User(Base):
     UniqueConstraint(nick_name, email)
 
     def __repr__(self):
-        return "<User(nick_name='{}', email='{}', key_word={})>" \
-            .format(self.nick_name, self.email, self.key_word)
+        return "<User(nick_name='{}', password='{}', email='{}'," \
+               "key_word='{}')>" \
+            .format(self.nick_name, self.password, self.email, self.key_word)
 
 
 class Message(Base):
@@ -53,7 +54,7 @@ class Message(Base):
     user = relationship("User", foreign_keys=[sender_id])
 
     def __repr__(self):
-        return "<Message(msg='{}', created_at='{}', sender_id={})>" \
+        return "<Message(msg='{}', created_at='{}', sender_id='{}')>" \
             .format(self.msg, self.created_at, self.sender_id)
 
 
@@ -63,6 +64,10 @@ class Conversation(Base):
     conversation_name = Column(String(32), nullable=False)
     joined = Column(Boolean, default=False, nullable=False)
     UniqueConstraint(conversation_name, joined)
+
+    def __repr__(self):
+        return "<Conversation(conversation_name='{}', joined='{}')>" \
+            .format(self.conversation_name, self.joined)
 
 
 class ConversationUser(Base):
@@ -90,8 +95,9 @@ class ConversationMessage(Base):
 
 
 def add_user(session: Session, data):
-    session.add(User(nick_name=data.get('nick_name'), email=data.get('email'),
-                     key_word=data.get('key_word')))
+    session.add(
+        User(nick_name=data.get('nick_name'), password=data.get('password'),
+             email=data.get('email')))
     session.commit()
 
 
@@ -103,6 +109,10 @@ def get_user_by_email(session: Session, email: str) -> User:
     return session.query(User).filter(User.email == email).first()
 
 
+def get_user_by_name(session: Session, name: str) -> User:
+    return session.query(User).filter(User.nick_name == name).first()
+
+
 def update_user(session: Session, user_: User, **kwargs):
     return session.query(User).filter(User.id == user_.id).update(kwargs)
 
@@ -112,26 +122,59 @@ def update_conversation(session: Session, conv_: Conversation, **kwargs):
         Conversation.id == conv_.id).update(kwargs)
 
 
+def get_conversation_by_room_name(session: Session,
+                                  room_name: str) -> Conversation:
+    return session.query(Conversation).filter(
+        Conversation.conversation_name == room_name).first()
+
+
 def get_all_users(session: Session) -> User:
     return session.query(User).all()
 
 
-def add_message(session: Session, data, created_at):
+def add_message(session: Session, data, created_at, sender_id):
     session.add(Message(msg=data.get('msg'), created_at=created_at,
-                        sender_id=data.get('sender_id')))
-    session.commit()
+                        sender_id=sender_id))
 
 
-def get_message_by_id(session: Session, id_: int) -> Message:
-    return session.query(Message).filter(Message.id == id_).first()
+def get_message_by_msg(session: Session, msg: str) -> Message:
+    return session.query(Message).filter(Message.msg == msg).first()
+
+
+def get_message_by_user_id(session: Session, id_: int) -> Message:
+    return session.query(Message).filter(Message.sender_id == id_).first()
 
 
 def add_conversation(session: Session, data):
-    session.add(Conversation(conversation_name=data.get('conversation_name')))
+    session.add(Conversation(conversation_name=data.get('room_name')))
+
+
+def add_conv_user(session: Session, user_id: int, conv_id: int):
+    session.add(ConversationUser(user_id=user_id, conv_id=conv_id))
     session.commit()
 
 
-def get_conversation_by_id(session: Session, id_: int) -> Conversation:
+def add_conv_msg(session: Session, user_id: int, conv_id: int):
+    session.add(ConversationUser(user_id=user_id, conv_id=conv_id))
+    session.commit()
+
+
+def get_conv_user_by_id(session: Session, id_: int) -> ConversationUser:
+    return session.query(ConversationUser).filter(
+        ConversationUser.id == id_).first()
+
+
+def get_conv_user_by_user_id(session: Session, id_: int) -> ConversationUser:
+    return session.query(ConversationUser).filter(
+        ConversationUser.user_id == id_).first()
+
+
+def get_all_conv_user_by_user_id(session: Session, id_: int) -> ConversationUser:
+    return session.query(ConversationUser).filter(
+        ConversationUser.user_id == id_).all()
+
+
+def get_conversations_by_id(session: Session, id_: int) -> Conversation:
     return session.query(Conversation).filter(Conversation.id == id_).all()
 
 
