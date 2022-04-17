@@ -8,6 +8,8 @@ from sqlalchemy import (
     create_engine,
     ForeignKey,
     UniqueConstraint,
+    and_,
+    join,
 )
 from sqlalchemy.orm import (
     relationship,
@@ -142,7 +144,7 @@ def get_message_by_msg(session: Session, msg: str) -> Message:
 
 
 def get_message_by_user_id(session: Session, id_: int) -> Message:
-    return session.query(Message).filter(Message.sender_id == id_).first()
+    return session.query(Message).filter(Message.id == id_).first()
 
 
 def add_conversation(session: Session, data):
@@ -169,7 +171,8 @@ def get_conv_user_by_user_id(session: Session, id_: int) -> ConversationUser:
         ConversationUser.user_id == id_).first()
 
 
-def get_all_conv_user_by_user_id(session: Session, id_: int) -> ConversationUser:
+def get_all_conv_user_by_user_id(session: Session,
+                                 id_: int) -> ConversationUser:
     return session.query(ConversationUser).filter(
         ConversationUser.user_id == id_).all()
 
@@ -179,8 +182,11 @@ def get_conversations_by_id(session: Session, id_: int) -> Conversation:
 
 
 def delete_conversation_by_id(session: Session, id_: int):
-    return session.query(Conversation).filter(Conversation.id == id_).delete()
+    con = session.query(Conversation).filter(Conversation.id == id_).first()
+    return session.delete(con)
 
 
-def delete_message_by_id(session: Session, id_: int):
-    return session.query(Message).filter(Message.id == id_).delete()
+def delete_message_by_id(session: Session, id_: int, sender: int):
+    msg = session.query(Message).filter(
+        and_(Message.id == id_, Message.sender_id == sender)).first()
+    return session.delete(msg)

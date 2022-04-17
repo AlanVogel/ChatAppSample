@@ -209,11 +209,18 @@ def lst_of_conversations(id):
 @authorization
 def delete_conversation(id):
     with Session.begin() as session:
-        user = get_user_by_id(session, id)
-        user_id = user.id
-        conv_user = get_conv_user_by_user_id(session, user_id)
-        conv_user_id = conv_user.id
-        delete_conversation_by_id(session, conv_user_id)
+        header = int(request.headers.get('user_id'))
+        user = get_user_by_id(session, header)
+        if not user:
+            return error_response(message='User does not exist',
+                                  status_code=404)
+        conv_user = get_conv_user_by_user_id(session, user.id)
+        if not conv_user:
+            return error_response(
+                message=f'Conversation by the id: {id} does not exist '
+                        f'for the user: {user.nick_name} ',
+                status_code=404)
+        delete_conversation_by_id(session, id)
         session.commit()
         return ok_response(message='Conversation deleted!')
 
@@ -222,11 +229,19 @@ def delete_conversation(id):
 @authorization
 def delete_message(id):
     with Session.begin() as session:
-        user = get_user_by_id(session, id)
-        user_id = user.id
-        msg = get_message_by_user_id(session, user_id)
-        msg_id = msg.id
-        delete_message_by_id(session, msg_id)
+        header = int(request.headers.get('user_id'))
+        user = get_user_by_id(session, header)
+        if not user:
+            return error_response(message='User does not exist',
+                                  status_code=404)
+        msg = get_message_by_user_id(session, user.id)
+        msg_by_h_id = get_message_by_user_id(session, id)
+        if not msg_by_h_id:
+            return error_response(
+                message=f'Message by the id: {id} does not exist'
+                f'for the user: {user.nick_name} ',
+                status_code=404)
+        delete_message_by_id(session, id, msg.sender_id)
         session.commit()
         return ok_response(message='Message deleted!')
 
