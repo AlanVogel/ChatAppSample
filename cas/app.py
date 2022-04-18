@@ -60,7 +60,9 @@ def register():
                                       status_code=404)
             else:
                 add_user(session, data)
-        return ok_response(message='User created!', **data)
+        return ok_response(message='User created!', **{
+            'data': {'Nick_name': data.get('nick_name'),
+                     'User_email': data.get('email')}})
     return error_response(message=val, status_code=400)
 
 
@@ -83,7 +85,7 @@ def login():
         print(ex)
         return error_response(message='something went wrong!', status_code=500)
     return ok_response(message='Success!', **{
-        'data': {'Authorization': token, 'user_id': user_id}})
+        'data': {'User_id': user_id, 'Token': token}})
 
 
 @app.route('/user/<int:id>', methods=['GET'])

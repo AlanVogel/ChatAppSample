@@ -96,26 +96,27 @@ def authorization(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         header = int(request.headers.get('user_id'))
+        if not header:
+            return error_response(message='Header: missing user_id!',
+                                  status_code=400)
+        auth_token = request.headers.get('authorization')
+        if not auth_token:
+            return error_response(message='Header: missing authorization!',
+                                  status_code=400)
         with Session.begin() as session:
             user = get_user_by_id(session, header)
             if not user:
                 return error_response(message='user does no exist!',
                                       status_code=404)
-            user_id = user.id
-            user_name = user.nick_name
             key_word = user.key_word
             if not key_word:
                 key_word = random_string(64)
                 update_user(session, user, key_word=key_word)
-            token = encode_security_token(user_id, user_name, key_word)
-            if not token:
-                return error_response(message='Token does not exist!',
-                                      status_code=404)
             session.commit()
         try:
-            decode_security_token(token, key_word)
+            decode_security_token(auth_token, key_word)
             return f(*args, **kwargs)
-        except:
-            return error_response(message='Something went wrong',
+        except Exception as ex:
+            return error_response(message='Could not decode the token',
                                   status_code=400)
     return decorated
