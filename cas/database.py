@@ -3,13 +3,11 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
-    Boolean,
     TIMESTAMP,
     create_engine,
     ForeignKey,
     UniqueConstraint,
     and_,
-    join,
 )
 from sqlalchemy.orm import (
     relationship,
@@ -64,12 +62,11 @@ class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True)
     conversation_name = Column(String(32), nullable=False)
-    joined = Column(Boolean, default=False, nullable=False)
-    UniqueConstraint(conversation_name, joined)
+    UniqueConstraint(conversation_name)
 
     def __repr__(self):
-        return "<Conversation(conversation_name='{}', joined='{}')>" \
-            .format(self.conversation_name, self.joined)
+        return "<Conversation(conversation_name='{}')>" \
+            .format(self.conversation_name)
 
 
 class ConversationUser(Base):

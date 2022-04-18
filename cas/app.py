@@ -20,10 +20,10 @@ from cas.database import (
     get_conv_user_by_user_id,
     get_message_by_msg,
     get_message_by_user_id,
-    update_conversation,
     get_conversation_by_room_name,
     delete_message_by_id,
     delete_conversation_by_id,
+    and_,
 )
 from cas.utils import (
     authorization,
@@ -37,8 +37,8 @@ from cas.utils import (
 from validation import (
     RegisterUserCheck,
     RoomCheck,
-    RoomJoinLeave,
     MessageCheck,
+    validation_check,
 )
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
@@ -51,11 +51,17 @@ recreate_database()
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
-    if RegisterUserCheck(**data):
+    val = validation_check(data, RegisterUserCheck)
+    if not val:
         with Session.begin() as session:
-            add_user(session, data)
+            user = get_user_by_email(session, data.get('email'))
+            if user:
+                return error_response(message='Email already exist!',
+                                      status_code=404)
+            else:
+                add_user(session, data)
         return ok_response(message='User created!', **data)
-    return error_response(message='Wrong email', status_code=400)
+    return error_response(message=val, status_code=400)
 
 
 @app.route('/login', methods=['POST'])
@@ -99,9 +105,9 @@ def get_user(id):
 @authorization
 def create_room():
     data = request.get_json()
-    if RoomCheck(**data):
+    val = validation_check(data, RoomCheck)
+    if not val:
         with Session.begin() as session:
-            add_conversation(session, data)
             user = get_user_by_name(session, name=data.get('nick_name'))
             if not user:
                 return error_response(message='User nickname does not exist!',
@@ -109,74 +115,103 @@ def create_room():
             conversation = get_conversation_by_room_name(session,
                                                          room_name=data.get(
                                                              'room_name'))
+            if conversation:
+                return error_response(
+                    message='Conversation room name already exist',
+                    status_code=404)
+            else:
+                add_conversation(session, data)
+                conversation = get_conversation_by_room_name(session,
+                                                             room_name=data.get
+                                                             ('room_name'))
             if not conversation:
                 return error_response(
                     message='Conversation room name does not exist',
                     status_code=404)
-            session.add(ConversationUser(user_id=user.id,
-                                         conversation_id=conversation.id))
         return ok_response(message='Room created', **{
             'req': {'user': data, 'header': request.headers.get('user_id')}})
+    return error_response(message=val, status_code=400)
 
 
 @app.route('/join_room', methods=['POST'])
 @authorization
 def join_room():
     data = request.get_json()
-    if RoomJoinLeave(**data):
+    val = validation_check(data, RoomCheck)
+    if not val:
         with Session.begin() as session:
             user = get_user_by_name(session, data.get('nick_name'))
-            conv_user = get_conv_user_by_id(session, user.id)
-            if not conv_user:
-                return error_response(
-                    message=f'conversation for user {user.nick_name} does no '
-                            f'exist!',
-                    status_code=404)
+            if not user:
+                return error_response(message='User doesnt exist!',
+                                      status_code=404)
             conversation = get_conversation_by_room_name(session,
                                                          data.get('room_name'))
-            if conversation.joined:
-                return error_response(message='You are already joined',
-                                      status_code=400)
-            update_conversation(session, conversation, joined=True)
+            if not conversation:
+                return error_response(message='Room name doesnt exist!',
+                                      status_code=404)
+            conv_user = get_conv_user_by_id(session, user.id)
+            if conv_user:
+                return error_response(message='You are already joined!',
+                                      status_code=404)
+            else:
+                session.add(ConversationUser(user_id=user.id,
+                                             conversation_id=conversation.id))
+                conv_user = get_conv_user_by_id(session, user.id)
+            if not conv_user:
+                return error_response(
+                    message=f'room for user {user.nick_name} does not'
+                            f'exist!',
+                    status_code=404)
             session.commit()
         return ok_response(
             message=f'You joined the room: {data.get("room_name")}', **data)
+    return error_response(message=val, status_code=400)
 
 
 @app.route('/leave_room', methods=['POST'])
 @authorization
 def leave_room():
     data = request.get_json()
-    if RoomJoinLeave(**data):
+    val = validation_check(data, RoomCheck)
+    if not val:
         with Session.begin() as session:
             user = get_user_by_name(session, data.get('nick_name'))
+            if not user:
+                return error_response(message='User doesnt exist!',
+                                      status_code=404)
             conv_user = get_conv_user_by_id(session, user.id)
             if not conv_user:
                 return error_response(
-                    message=f'conversation for user {user.nick_name} does no '
+                    message=f'room for the user {user.nick_name} does not'
                             f'exist!',
                     status_code=404)
             conversation = get_conversation_by_room_name(session,
                                                          data.get('room_name'))
-            if not conversation.joined:
-                return error_response(message='You are already leaved',
-                                      status_code=400)
-            update_conversation(session, conversation, joined=False)
+            if not conversation:
+                return error_response(message='Room name doesnt exist!',
+                                      status_code=404)
+            room = session.query(ConversationUser).filter(
+                and_(ConversationUser.user_id == user.id,
+                     ConversationUser.conversation_id == conversation.id)
+            ).first()
+            session.delete(room)
             session.commit()
         return ok_response(
             message=f'You leaved the room: {data.get("room_name")}', **data)
+    return error_response(message=val, status_code=400)
 
 
 @app.route('/send_msg', methods=['POST'])
 @authorization
 def send_msg():
     data = request.get_json()
-    if MessageCheck(**data):
+    val = validation_check(data, MessageCheck)
+    if not val:
         with Session.begin() as session:
             user = get_user_by_name(session, data.get('nick_name'))
             conv = get_conversation_by_room_name(session,
                                                  data.get('room_name'))
-            if not conv.joined:
+            if not conv:
                 return error_response(
                     message='You are not joined to the conversation',
                     status_code=404)
@@ -187,7 +222,7 @@ def send_msg():
                                             message_id=msg.id))
             session.commit()
         return ok_response(message='message is successfully send!', **data)
-    return error_response(message='something went wrong!', status_code=500)
+    return error_response(message=val, status_code=400)
 
 
 @app.route('/list_con/<int:id>', methods=['GET'])
@@ -239,7 +274,7 @@ def delete_message(id):
         if not msg_by_h_id:
             return error_response(
                 message=f'Message by the id: {id} does not exist'
-                f'for the user: {user.nick_name} ',
+                        f'for the user: {user.nick_name} ',
                 status_code=404)
         delete_message_by_id(session, id, msg.sender_id)
         session.commit()

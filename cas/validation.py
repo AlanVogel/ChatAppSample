@@ -1,6 +1,7 @@
 from pydantic import (
     BaseModel,
     validator,
+    ValidationError,
 )
 from email_validator import (
     validate_email,
@@ -31,15 +32,12 @@ class RoomCheck(BaseName):
     room_name: str
 
 
-class RoomJoinLeave(RoomCheck):
-    button: str
-
-    @validator("button")
-    def button_string(cls, button):
-        if button != 'join' and button != 'leave':
-            raise ValueError(f"{button} is not valid! Try use join/leave")
-        return button
-
-
 class MessageCheck(RoomCheck):
     msg: str
+
+
+def validation_check(data: dict, checker):
+    try:
+        checker(**data)
+    except ValidationError as e:
+        return str(e)
