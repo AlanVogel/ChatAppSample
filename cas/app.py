@@ -93,6 +93,9 @@ def login():
 def get_user(id):
     with Session.begin() as session:
         user = get_user_by_id(session, id)
+        if not user:
+            return error_response(message='User does not exist',
+                                  status_code=404)
         user_id = user.id
         user_name = user.nick_name
         user_pass = user.password
@@ -286,7 +289,7 @@ def delete_message(id):
         msg_by_h_id = get_message_by_user_id(session, id)
         if not msg_by_h_id:
             return error_response(
-                message=f'Message by the id: {id} does not exist'
+                message=f'Message by the id: {id} does not exist '
                         f'for the user: {user.nick_name} ',
                 status_code=404)
         delete_message_by_id(session, id, msg.sender_id)

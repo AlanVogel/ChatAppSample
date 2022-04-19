@@ -100,6 +100,32 @@ class Endpoints(BaseUnittest):
             self.assertEqual(info.get('code'), 404)
             self.assertEqual(info.get('status'), 'ERROR')
 
+    def test_get_user_pass(self):
+        with Session.begin() as session:
+            create_user(session)
+        with app.test_client() as client_test:
+            res = client_test.get('/user/1',
+                                  headers={"User_id": 1,
+                                           "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 5)
+            self.assertEqual(info.get('message'), 'Success!')
+            self.assertEqual(info.get('code'), 200)
+            self.assertEqual(info.get('status'), 'OK')
+
+    def test_get_user_fail(self):
+        with app.test_client() as client_test:
+            res = client_test.get('/user/1',
+                                  headers={"User_id": 1,
+                                           "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'), 'User does not exist!')
+            self.assertEqual(info.get('code'), 404)
+            self.assertEqual(info.get('status'), 'ERROR')
+
     def test_create_room_pass(self):
         with Session.begin() as session:
             user = create_user(session)
@@ -384,6 +410,148 @@ class Endpoints(BaseUnittest):
             self.assertEqual(type(info), dict)
             self.assertEqual(len(info), 4)
             self.assertEqual(info.get('message'), 'User does not exist!')
+            self.assertEqual(info.get('code'), 404)
+            self.assertEqual(info.get('status'), 'ERROR')
+
+    def test_lst_of_conversation_pass(self):
+        with Session.begin() as session:
+            user = create_user(session)
+            conv = create_conversation(session)
+            user_id = user.id
+            conv_id = conv.id
+            create_conv_user(session, user_id=user_id, conv_id=conv_id)
+        with app.test_client() as client_test:
+            res = client_test.get('/list_con/1',
+                                  headers={"User_id": 1,
+                                           "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 5)
+            self.assertEqual(info.get('message'), 'Success!')
+            self.assertEqual(info.get('code'), 200)
+            self.assertEqual(info.get('status'), 'OK')
+
+    def test_lst_of_conversation_fail_case1(self):
+        with app.test_client() as client_test:
+            res = client_test.get('/list_con/1',
+                                  headers={"User_id": 1,
+                                           "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'), 'User does not exist!')
+            self.assertEqual(info.get('code'), 404)
+            self.assertEqual(info.get('status'), 'ERROR')
+
+    def test_lst_of_conversation_fail_case2(self):
+        with Session.begin() as session:
+            user = create_user(session)
+            create_conversation(session)
+            user_name = user.nick_name
+        with app.test_client() as client_test:
+            res = client_test.get('/list_con/1',
+                                  headers={"User_id": 1,
+                                           "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'),
+                             f'Room for the user {user_name} does not exist!')
+            self.assertEqual(info.get('code'), 404)
+            self.assertEqual(info.get('status'), 'ERROR')
+
+    def test_delete_conversation_pass(self):
+        with Session.begin() as session:
+            user = create_user(session)
+            conv = create_conversation(session)
+            user_id = user.id
+            conv_id = conv.id
+            create_conv_user(session, user_id=user_id, conv_id=conv_id)
+        with app.test_client() as client_test:
+            res = client_test.delete('/delete_con/1',
+                                     headers={"User_id": 1,
+                                              "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'), 'Conversation deleted!')
+            self.assertEqual(info.get('code'), 200)
+            self.assertEqual(info.get('status'), 'OK')
+
+    def test_delete_conversation_fail_case1(self):
+        with app.test_client() as client_test:
+            res = client_test.delete('/delete_con/1',
+                                     headers={"User_id": 1,
+                                              "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'), 'User does not exist!')
+            self.assertEqual(info.get('code'), 404)
+            self.assertEqual(info.get('status'), 'ERROR')
+
+    def test_delete_conversation_fail_case2(self):
+        with Session.begin() as session:
+            user = create_user(session)
+            room = create_conversation(session)
+            user_name = user.nick_name
+            conv_id = room.id
+        with app.test_client() as client_test:
+            res = client_test.delete('/delete_con/1',
+                                     headers={"User_id": 1,
+                                              "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'),
+                             f'Conversation by the id: {conv_id} does not '
+                             f'exist for the user: {user_name} ')
+            self.assertEqual(info.get('code'), 404)
+            self.assertEqual(info.get('status'), 'ERROR')
+
+    def test_delete_messages_pass(self):
+        with Session.begin() as session:
+            create_user(session)
+            create_message(session)
+        with app.test_client() as client_test:
+            res = client_test.delete('/delete_msg/1',
+                                     headers={"User_id": 1,
+                                              "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'), 'Message deleted!')
+            self.assertEqual(info.get('code'), 200)
+            self.assertEqual(info.get('status'), 'OK')
+
+    def test_delete_messages_fail_case1(self):
+        with app.test_client() as client_test:
+            res = client_test.delete('/delete_msg/1',
+                                     headers={"User_id": 1,
+                                              "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'), 'User does not exist!')
+            self.assertEqual(info.get('code'), 404)
+            self.assertEqual(info.get('status'), 'ERROR')
+
+    def test_delete_messages_fail_case2(self):
+        with Session.begin() as session:
+            user = create_user(session)
+            user_name = user.nick_name
+            create_message(session)
+            header_id = 2
+        with app.test_client() as client_test:
+            res = client_test.delete(f'/delete_msg/{header_id}',
+                                     headers={"User_id": 1,
+                                              "authorization": "asj34"})
+            info = res.json.get('info').get('data')
+            self.assertEqual(type(info), dict)
+            self.assertEqual(len(info), 4)
+            self.assertEqual(info.get('message'),
+                             f'Message by the id: {header_id} does not exist '
+                             f'for the user: {user_name} ')
             self.assertEqual(info.get('code'), 404)
             self.assertEqual(info.get('status'), 'ERROR')
 

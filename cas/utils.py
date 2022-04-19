@@ -106,7 +106,7 @@ def authorization(f):
         with Session.begin() as session:
             user = get_user_by_id(session, header)
             if not user:
-                return error_response(message='user does no exist!',
+                return error_response(message='User does not exist!',
                                       status_code=404)
             key_word = user.key_word
             if not key_word:
