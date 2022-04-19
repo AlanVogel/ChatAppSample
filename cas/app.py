@@ -57,7 +57,7 @@ def register():
             user = get_user_by_email(session, data.get('email'))
             if user:
                 return error_response(message='Email already exist!',
-                                      status_code=404)
+                                      status_code=400)
             else:
                 add_user(session, data)
         return ok_response(message='User created!', **{
@@ -120,7 +120,7 @@ def create_room():
             if conversation:
                 return error_response(
                     message='Conversation room name already exist',
-                    status_code=404)
+                    status_code=400)
             else:
                 add_conversation(session, data)
                 conversation = get_conversation_by_room_name(session,
@@ -154,7 +154,7 @@ def join_room():
             conv_user = get_conv_user_by_id(session, user.id)
             if conv_user:
                 return error_response(message='You are already joined!',
-                                      status_code=404)
+                                      status_code=400)
             else:
                 session.add(ConversationUser(user_id=user.id,
                                              conversation_id=conversation.id))

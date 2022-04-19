@@ -98,11 +98,11 @@ def authorization(f):
         header = int(request.headers.get('user_id'))
         if not header:
             return error_response(message='Header: missing user_id!',
-                                  status_code=400)
+                                  status_code=404)
         auth_token = request.headers.get('authorization')
         if not auth_token:
             return error_response(message='Header: missing authorization!',
-                                  status_code=400)
+                                  status_code=404)
         with Session.begin() as session:
             user = get_user_by_id(session, header)
             if not user:
@@ -117,6 +117,6 @@ def authorization(f):
             decode_security_token(auth_token, key_word)
             return f(*args, **kwargs)
         except Exception as ex:
-            return error_response(message='Could not decode the token',
-                                  status_code=400)
+            return error_response(message='Authorization error',
+                                  status_code=401)
     return decorated
