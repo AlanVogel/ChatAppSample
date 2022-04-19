@@ -34,7 +34,7 @@ from cas.utils import (
     error_response,
     now,
 )
-from validation import (
+from cas.validation import (
     RegisterUserCheck,
     RoomCheck,
     MessageCheck,
@@ -73,7 +73,7 @@ def login():
         with Session.begin() as session:
             user = get_user_by_email(session, data.get('email'))
             if not user:
-                return error_response(message='user does no exist!',
+                return error_response(message='User does no exist!',
                                       status_code=404)
             user_id = user.id
             user_name = user.nick_name
@@ -119,7 +119,7 @@ def create_room():
                                                              'room_name'))
             if conversation:
                 return error_response(
-                    message='Conversation room name already exist',
+                    message='Conversation room name already exist!',
                     status_code=400)
             else:
                 add_conversation(session, data)
@@ -128,9 +128,9 @@ def create_room():
                                                              ('room_name'))
             if not conversation:
                 return error_response(
-                    message='Conversation room name does not exist',
+                    message='Conversation room name does not exist!',
                     status_code=404)
-        return ok_response(message='Room created', **{
+        return ok_response(message='Room created!', **{
             'req': {'user': data, 'header': request.headers.get('user_id')}})
     return error_response(message=val, status_code=400)
 
@@ -144,12 +144,12 @@ def join_room():
         with Session.begin() as session:
             user = get_user_by_name(session, data.get('nick_name'))
             if not user:
-                return error_response(message='User doesnt exist!',
+                return error_response(message='User does not exist!',
                                       status_code=404)
             conversation = get_conversation_by_room_name(session,
                                                          data.get('room_name'))
             if not conversation:
-                return error_response(message='Room name doesnt exist!',
+                return error_response(message='Room name does not exist!',
                                       status_code=404)
             conv_user = get_conv_user_by_id(session, user.id)
             if conv_user:
@@ -179,18 +179,18 @@ def leave_room():
         with Session.begin() as session:
             user = get_user_by_name(session, data.get('nick_name'))
             if not user:
-                return error_response(message='User doesnt exist!',
+                return error_response(message='User does not exist!',
                                       status_code=404)
             conv_user = get_conv_user_by_id(session, user.id)
             if not conv_user:
                 return error_response(
-                    message=f'room for the user {user.nick_name} does not'
-                            f'exist!',
+                    message=f'Room for the user {user.nick_name} does not'
+                            f' exist!',
                     status_code=404)
             conversation = get_conversation_by_room_name(session,
                                                          data.get('room_name'))
             if not conversation:
-                return error_response(message='Room name doesnt exist!',
+                return error_response(message='Room name does not exist!',
                                       status_code=404)
             room = session.query(ConversationUser).filter(
                 and_(ConversationUser.user_id == user.id,
@@ -211,11 +211,14 @@ def send_msg():
     if not val:
         with Session.begin() as session:
             user = get_user_by_name(session, data.get('nick_name'))
+            if not user:
+                return error_response(message='User does not exist!',
+                                      status_code=404)
             conv = get_conversation_by_room_name(session,
                                                  data.get('room_name'))
             if not conv:
                 return error_response(
-                    message='You are not joined to the conversation',
+                    message='You are not joined to the conversation!',
                     status_code=404)
             add_message(session, data=data, created_at=now(),
                         sender_id=user.id)
@@ -223,7 +226,7 @@ def send_msg():
             session.add(ConversationMessage(conversation_id=conv.id,
                                             message_id=msg.id))
             session.commit()
-        return ok_response(message='message is successfully send!', **data)
+        return ok_response(message='Message is successfully send!', **data)
     return error_response(message=val, status_code=400)
 
 
@@ -233,8 +236,16 @@ def lst_of_conversations(id):
     conv_data = {}
     with Session.begin() as session:
         user = get_user_by_id(session, id)
+        if not user:
+            return error_response(message='User does not exist!',
+                                  status_code=404)
         user_id = user.id
         conv_user = get_all_conv_user_by_user_id(session, user_id)
+        if not conv_user:
+            return error_response(
+                message=f'Room for the user {user.nick_name} does not'
+                        f' exist!',
+                status_code=404)
         for all_con in conv_user:
             conv_data['Room {0}'.format(
                 all_con.id)] = all_con.conversation.conversation_name
