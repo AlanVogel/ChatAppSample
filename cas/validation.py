@@ -28,7 +28,8 @@ class RegisterUserCheck(BaseName, Login):
             raise ValueError(f"{email} is not a valid email: {e}")
 
 
-class RoomCheck(BaseName):
+class RoomCheck(BaseModel):
+    user_id: int
     room_name: str
 
 

@@ -158,9 +158,11 @@ def add_conv_msg(session: Session, user_id: int, conv_id: int):
     session.commit()
 
 
-def get_conv_user_by_id(session: Session, id_: int) -> ConversationUser:
+def get_conv_user_by_ids(session: Session, id_: int,
+                         room_id: int) -> ConversationUser:
     return session.query(ConversationUser).filter(
-        ConversationUser.id == id_).first()
+        ConversationUser.user_id == id_,
+        ConversationUser.conversation_id == room_id).first()
 
 
 def get_conv_user_by_user_id(session: Session, id_: int) -> ConversationUser:
@@ -174,8 +176,8 @@ def get_all_conv_user_by_user_id(session: Session,
         ConversationUser.user_id == id_).all()
 
 
-def get_conversations_by_id(session: Session, id_: int) -> Conversation:
-    return session.query(Conversation).filter(Conversation.id == id_).all()
+def get_conversation_by_id(session: Session, id_: int) -> Conversation:
+    return session.query(Conversation).filter(Conversation.id == id_).first()
 
 
 def delete_conversation_by_id(session: Session, id_: int):

@@ -14,8 +14,7 @@ from cas.database import (
     update_user,
     get_user_by_email,
     get_user_by_id,
-    get_user_by_name,
-    get_conv_user_by_id,
+    get_conv_user_by_ids,
     get_all_conv_user_by_user_id,
     get_conv_user_by_user_id,
     get_message_by_msg,
@@ -23,7 +22,6 @@ from cas.database import (
     get_conversation_by_room_name,
     delete_message_by_id,
     delete_conversation_by_id,
-    and_,
 )
 from cas.utils import (
     authorization,
@@ -50,20 +48,23 @@ recreate_database()
 
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
-    val = validation_check(data, RegisterUserCheck)
-    if not val:
-        with Session.begin() as session:
-            user = get_user_by_email(session, data.get('email'))
-            if user:
-                return error_response(message='Email already exist!',
-                                      status_code=400)
-            else:
-                add_user(session, data)
-        return ok_response(message='User created!', **{
-            'data': {'Nick_name': data.get('nick_name'),
-                     'User_email': data.get('email')}})
-    return error_response(message=val, status_code=400)
+    try:
+        data = request.get_json()
+        val = validation_check(data, RegisterUserCheck)
+        if not val:
+            with Session.begin() as session:
+                user = get_user_by_email(session, data.get('email'))
+                if user:
+                    return error_response(message='Email already exist!',
+                                          status_code=400)
+                else:
+                    add_user(session, data)
+            return ok_response(message='User created!', **{
+                'User_info': {'Nick_name': data.get('nick_name'),
+                              'User_email': data.get('email')}})
+        return error_response(message=val, status_code=400)
+    except BaseException as ex:
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 @app.route('/login', methods=['POST'])
@@ -81,29 +82,26 @@ def login():
             update_user(session, user, key_word=key_word)
             token = encode_security_token(user_id, user_name, key_word)
             session.commit()
+        return ok_response(message='Success!', **{'Authorization': token})
     except BaseException as ex:
-        print(ex)
-        return error_response(message='something went wrong!', status_code=500)
-    return ok_response(message='Success!', **{
-        'data': {'User_id': user_id, 'Token': token}})
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 @app.route('/user/<int:id>', methods=['GET'])
 @authorization
 def get_user(id):
-    with Session.begin() as session:
-        user = get_user_by_id(session, id)
-        if not user:
-            return error_response(message='User does not exist',
-                                  status_code=404)
-        user_id = user.id
-        user_name = user.nick_name
-        user_pass = user.password
-        user_email = user.email
-        user_key = user.key_word
-    return ok_response(message='Success!', **{
-        'data': {'id': user_id, 'nick_name': user_name, 'password': user_pass,
-                 'email': user_email, 'key_word': user_key}})
+    try:
+        with Session.begin() as session:
+            user = get_user_by_id(session, id)
+            if not user:
+                return error_response(message='User does not exist',
+                                      status_code=404)
+            user_name = user.nick_name
+            user_email = user.email
+        return ok_response(message='Success!', **{
+            'User_info': {'Name': user_name, 'Email': user_email}})
+    except BaseException as ex:
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 @app.route('/create_room', methods=['POST'])
@@ -113,10 +111,13 @@ def create_room():
     val = validation_check(data, RoomCheck)
     if not val:
         with Session.begin() as session:
-            user = get_user_by_name(session, name=data.get('nick_name'))
+            user = get_user_by_id(session, id_=data.get('user_id'))
             if not user:
                 return error_response(message='User nickname does not exist!',
                                       status_code=404)
+            user_id = user.id
+            user_name = user.nick_name
+            user_email = user.email
             conversation = get_conversation_by_room_name(session,
                                                          room_name=data.get(
                                                              'room_name'))
@@ -133,8 +134,18 @@ def create_room():
                 return error_response(
                     message='Conversation room name does not exist!',
                     status_code=404)
-        return ok_response(message='Room created!', **{
-            'req': {'user': data, 'header': request.headers.get('user_id')}})
+            room_id = conversation.id
+            room_name = conversation.conversation_name
+            conv_user = get_conv_user_by_ids(session, user_id, room_id)
+            if conv_user:
+                return error_response(message='You are already joined!',
+                                      status_code=400)
+            else:
+                session.add(ConversationUser(
+                    user_id=user.id, conversation_id=conversation.id))
+        return ok_response(message='Room created!', **{'Info': {
+            'User': {'ID': user_id, 'Name': user_name, 'Email': user_email},
+            'Room': {'ID': room_id, 'Name': room_name}}})
     return error_response(message=val, status_code=400)
 
 
@@ -145,156 +156,192 @@ def join_room():
     val = validation_check(data, RoomCheck)
     if not val:
         with Session.begin() as session:
-            user = get_user_by_name(session, data.get('nick_name'))
+            user = get_user_by_id(session, data.get('user_id'))
             if not user:
                 return error_response(message='User does not exist!',
                                       status_code=404)
+            user_id = user.id
+            user_name = user.nick_name
             conversation = get_conversation_by_room_name(session,
                                                          data.get('room_name'))
             if not conversation:
                 return error_response(message='Room name does not exist!',
                                       status_code=404)
-            conv_user = get_conv_user_by_id(session, user.id)
+            room_id = conversation.id
+            conv_user = get_conv_user_by_ids(session, user_id, room_id)
             if conv_user:
                 return error_response(message='You are already joined!',
                                       status_code=400)
             else:
-                session.add(ConversationUser(user_id=user.id,
+                session.add(ConversationUser(user_id=user_id,
                                              conversation_id=conversation.id))
-                conv_user = get_conv_user_by_id(session, user.id)
+                conv_user = get_conv_user_by_ids(session, user_id, room_id)
             if not conv_user:
                 return error_response(
-                    message=f'room for user {user.nick_name} does not'
-                            f'exist!',
+                    message=f'Room for the user {user_name} does not exist!',
                     status_code=404)
             session.commit()
         return ok_response(
-            message=f'You joined the room: {data.get("room_name")}', **data)
+            message=f'You joined the room: {data.get("room_name")}',
+            **{'User': {'ID': user_id, 'Name': user_name},
+               'Room': data.get('room_name')})
     return error_response(message=val, status_code=400)
 
 
-@app.route('/leave_room', methods=['POST'])
+@app.route('/leave_room', methods=['DELETE'])
 @authorization
 def leave_room():
-    data = request.get_json()
-    val = validation_check(data, RoomCheck)
-    if not val:
-        with Session.begin() as session:
-            user = get_user_by_name(session, data.get('nick_name'))
-            if not user:
-                return error_response(message='User does not exist!',
-                                      status_code=404)
-            conv_user = get_conv_user_by_id(session, user.id)
-            if not conv_user:
-                return error_response(
-                    message=f'Room for the user {user.nick_name} does not'
-                            f' exist!',
-                    status_code=404)
-            conversation = get_conversation_by_room_name(session,
-                                                         data.get('room_name'))
-            if not conversation:
-                return error_response(message='Room name does not exist!',
-                                      status_code=404)
-            room = session.query(ConversationUser).filter(
-                and_(ConversationUser.user_id == user.id,
-                     ConversationUser.conversation_id == conversation.id)
-            ).first()
-            session.delete(room)
-            session.commit()
-        return ok_response(
-            message=f'You leaved the room: {data.get("room_name")}', **data)
-    return error_response(message=val, status_code=400)
+    try:
+        data = request.get_json()
+        val = validation_check(data, RoomCheck)
+        if not val:
+            with Session.begin() as session:
+                user = get_user_by_id(session, id_=data.get('user_id'))
+                if not user:
+                    return error_response(message='User does not exist!',
+                                          status_code=404)
+                user_id = user.id
+                user_name = user.nick_name
+                conversation = get_conversation_by_room_name(session,
+                                                             data.get(
+                                                                 'room_name'))
+                if not conversation:
+                    return error_response(message='Room name does not exist!',
+                                          status_code=404)
+                room_id = conversation.id
+                conv_user = get_conv_user_by_ids(session, user_id, room_id)
+                if not conv_user:
+                    return error_response(
+                        message=f'Room for the user {user_name} does not '
+                                f'exist!',
+                        status_code=404)
+                conversation = get_conversation_by_room_name(session,
+                                                             data.get(
+                                                                 'room_name'))
+                if not conversation:
+                    return error_response(message='Room name does not exist!',
+                                          status_code=404)
+                room = session.query(ConversationUser).filter(
+                    ConversationUser.user_id == user_id,
+                    ConversationUser.conversation_id == conversation.id).first()
+                session.delete(room)
+                session.commit()
+                return ok_response(
+                    message=f'You leaved the room: {data.get("room_name")}',
+                    **{'User': {'ID': user_id, 'Name': user_name},
+                       'Room': data.get('room_name')})
+        return error_response(message=val, status_code=400)
+    except BaseException as ex:
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 @app.route('/send_msg', methods=['POST'])
 @authorization
 def send_msg():
-    data = request.get_json()
-    val = validation_check(data, MessageCheck)
-    if not val:
-        with Session.begin() as session:
-            user = get_user_by_name(session, data.get('nick_name'))
-            if not user:
-                return error_response(message='User does not exist!',
-                                      status_code=404)
-            conv = get_conversation_by_room_name(session,
-                                                 data.get('room_name'))
-            if not conv:
-                return error_response(
-                    message='You are not joined to the conversation!',
-                    status_code=404)
-            add_message(session, data=data, created_at=now(),
-                        sender_id=user.id)
-            msg = get_message_by_msg(session, data.get('msg'))
-            session.add(ConversationMessage(conversation_id=conv.id,
-                                            message_id=msg.id))
-            session.commit()
-        return ok_response(message='Message is successfully send!', **data)
-    return error_response(message=val, status_code=400)
+    try:
+        data = request.get_json()
+        val = validation_check(data, MessageCheck)
+        if not val:
+            with Session.begin() as session:
+                user = get_user_by_id(session, data.get('user_id'))
+                if not user:
+                    return error_response(message='User does not exist!',
+                                          status_code=404)
+                user_id = user.id
+                user_name = user.nick_name
+                conv = get_conversation_by_room_name(session,
+                                                     data.get('room_name'))
+                if not conv:
+                    return error_response(
+                        message='You are not joined to the conversation!',
+                        status_code=404)
+                add_message(session, data=data, created_at=now(),
+                            sender_id=user_id)
+                msg = get_message_by_msg(session, data.get('msg'))
+                session.add(ConversationMessage(conversation_id=conv.id,
+                                                message_id=msg.id))
+                session.commit()
+            return ok_response(message='Message is successfully send!',
+                               **{'User': {'ID': user_id, 'Name': user_name},
+                                  'Room': data.get('room_name'),
+                                  'Message': data.get('msg')})
+        return error_response(message=val, status_code=400)
+    except BaseException as ex:
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 @app.route('/list_con/<int:id>', methods=['GET'])
 @authorization
 def lst_of_conversations(id):
-    conv_data = {}
-    with Session.begin() as session:
-        user = get_user_by_id(session, id)
-        if not user:
-            return error_response(message='User does not exist!',
-                                  status_code=404)
-        user_id = user.id
-        conv_user = get_all_conv_user_by_user_id(session, user_id)
-        if not conv_user:
-            return error_response(
-                message=f'Room for the user {user.nick_name} does not'
-                        f' exist!',
-                status_code=404)
-        for all_con in conv_user:
-            conv_data['Room {0}'.format(
-                all_con.id)] = all_con.conversation.conversation_name
-        return ok_response(message='Success!', **{
-            'conversation_data': {'rooms': conv_data}})
+    try:
+        conv_data = {}
+        with Session.begin() as session:
+            user = get_user_by_id(session, id)
+            if not user:
+                return error_response(message='User does not exist!',
+                                      status_code=404)
+            user_id = user.id
+            user_name = user.nick_name
+            conv_user = get_all_conv_user_by_user_id(session, user_id)
+            if not conv_user:
+                return error_response(
+                    message=f'Room for the user {user_name} does not exist!',
+                    status_code=404)
+            for all_con in conv_user:
+                conv_data['Room {0}'.format(
+                    all_con.id)] = all_con.conversation.conversation_name
+            return ok_response(message='Success!', **{
+                'conversation_data': {'rooms': conv_data}})
+    except BaseException as ex:
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 @app.route('/delete_con/<int:id>', methods=['DELETE'])
 @authorization
 def delete_conversation(id):
-    with Session.begin() as session:
-        header = int(request.headers.get('user_id'))
-        user = get_user_by_id(session, header)
-        if not user:
-            return error_response(message='User does not exist',
-                                  status_code=404)
-        conv_user = get_conv_user_by_user_id(session, user.id)
-        if not conv_user:
-            return error_response(
-                message=f'Conversation by the id: {id} does not exist '
-                        f'for the user: {user.nick_name} ',
-                status_code=404)
-        delete_conversation_by_id(session, id)
-        session.commit()
-        return ok_response(message='Conversation deleted!')
+    try:
+        with Session.begin() as session:
+            header = int(request.headers.get('user_id'))
+            user = get_user_by_id(session, header)
+            if not user:
+                return error_response(message='User does not exist',
+                                      status_code=404)
+            conv_user = get_conv_user_by_user_id(session, user.id)
+            if not conv_user:
+                return error_response(
+                    message=f'Conversation by the id: {id} does not exist '
+                            f'for the user: {user.nick_name} ',
+                    status_code=404)
+            delete_conversation_by_id(session, id)
+            session.commit()
+            return ok_response(message='Conversation deleted!')
+    except BaseException as ex:
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 @app.route('/delete_msg/<int:id>', methods=['DELETE'])
 @authorization
 def delete_message(id):
-    with Session.begin() as session:
-        header = int(request.headers.get('user_id'))
-        user = get_user_by_id(session, header)
-        if not user:
-            return error_response(message='User does not exist',
-                                  status_code=404)
-        msg = get_message_by_user_id(session, user.id)
-        msg_by_h_id = get_message_by_user_id(session, id)
-        if not msg_by_h_id:
-            return error_response(
-                message=f'Message by the id: {id} does not exist '
-                        f'for the user: {user.nick_name} ',
-                status_code=404)
-        delete_message_by_id(session, id, msg.sender_id)
-        session.commit()
-        return ok_response(message='Message deleted!')
+    try:
+        data = request.get_json()
+        with Session.begin() as session:
+            # header = int(request.headers.get('user_id'))
+            user = get_user_by_id(session, data.get('user_id'))
+            if not user:
+                return error_response(message='User does not exist',
+                                      status_code=404)
+            msg = get_message_by_user_id(session, user.id)
+            msg_by_h_id = get_message_by_user_id(session, id)
+            if not msg_by_h_id:
+                return error_response(
+                    message=f'Message by the id: {id} does not exist '
+                            f'for the user: {user.nick_name} ',
+                    status_code=404)
+            delete_message_by_id(session, id, msg.sender_id)
+            session.commit()
+            return ok_response(message='Message deleted!')
+    except BaseException as ex:
+        return error_response(message=f'Error: {ex}', status_code=500)
 
 
 if __name__ == '__main__':

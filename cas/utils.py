@@ -95,28 +95,35 @@ def error_response(message, status_code):
 def authorization(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        data = request.get_json()
         header = int(request.headers.get('user_id'))
         if not header:
             return error_response(message='Header: missing user_id!',
-                                  status_code=404)
+                                  status_code=401)
         auth_token = request.headers.get('authorization')
         if not auth_token:
             return error_response(message='Header: missing authorization!',
-                                  status_code=404)
+                                  status_code=401)
         with Session.begin() as session:
-            user = get_user_by_id(session, header)
+            user = get_user_by_id(session, data.get('user_id'))
             if not user:
                 return error_response(message='User does not exist!',
                                       status_code=404)
+            user_id = user.id
+            if user_id != header:
+                return error_response(
+                    message=f'User ID {user_id} and the HeaderID {header} '
+                            f'are not matching!',
+                    status_code=401)
             key_word = user.key_word
-            if not key_word:
-                key_word = random_string(64)
-                update_user(session, user, key_word=key_word)
             session.commit()
         try:
-            decode_security_token(auth_token, key_word)
-            return f(*args, **kwargs)
+            response = decode_security_token(auth_token, key_word)
+            if response.get('user_id') == header:
+                return f(*args, **kwargs)
         except Exception as ex:
-            return error_response(message='Authorization error',
-                                  status_code=401)
+            print(ex)
+            return error_response(
+                message=f'Authorization error: wrong security-token',
+                status_code=401)
     return decorated
