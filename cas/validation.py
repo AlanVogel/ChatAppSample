@@ -33,7 +33,12 @@ class RoomCheck(BaseModel):
     room_name: str
 
 
-class MessageCheck(RoomCheck):
+class RoomJoinLeave(BaseModel):
+    user_id: int
+    room_id: int
+
+
+class MessageCheck(RoomJoinLeave):
     msg: str
 
 

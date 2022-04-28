@@ -187,5 +187,15 @@ def delete_conversation_by_id(session: Session, id_: int):
 
 def delete_message_by_id(session: Session, id_: int, sender: int):
     msg = session.query(Message).filter(
-        and_(Message.id == id_, Message.sender_id == sender)).first()
+        Message.id == id_, Message.sender_id == sender).first()
+    return session.delete(msg)
+
+
+def join_user_msg(session: Session, user_id: int):
+    msg = session.query(Message).join(User).filter(User.id == user_id).all()
+    return msg
+
+
+def delete_msg_by_msg_id(session: Session, id_: int):
+    msg = session.query(Message).filter(Message.id == id_).first()
     return session.delete(msg)

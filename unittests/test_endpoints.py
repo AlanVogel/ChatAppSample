@@ -2,9 +2,6 @@ import unittest
 from cas.app import (
     register,
     login,
-    create_room,
-    join_room,
-    leave_room,
 )
 from cas.utils import app
 from unittests.utils import (
@@ -145,7 +142,7 @@ class Endpoints(BaseUnittest):
 
     def test_create_room_fail_case1(self):
         with Session.begin() as session:
-            user = create_user(session)
+            create_user(session)
         with app.test_client() as client_test:
             res = client_test.post('/create_room', json={
                 "nick_name": 'John', "room_name": 'Science'},

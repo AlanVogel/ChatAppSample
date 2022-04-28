@@ -92,38 +92,42 @@ def error_response(message, status_code):
     return jsonify({"info": {'data': data}, "status_code": status_code})
 
 
+def refresh_security_token():
+    try:
+        user_id = int(request.headers.get('user_id'))
+        with Session.begin() as session:
+            user = get_user_by_id(session, user_id)
+            update_user(session, user, key_word=random_string(64))
+            token = encode_security_token(user.id, user.nick_name,
+                                          user.key_word)
+            return ok_response(
+                message='Security token has successfully updated!',
+                **{'User_id': user.id, 'Authorization': token})
+    except BaseException as ex:
+        print(ex)
+        return error_response(
+            message='Something went wrong refreshing the security token',
+            status_code=500)
+
+
 def authorization(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        data = request.get_json()
-        header = int(request.headers.get('user_id'))
-        if not header:
-            return error_response(message='Header: missing user_id!',
-                                  status_code=401)
-        auth_token = request.headers.get('authorization')
-        if not auth_token:
-            return error_response(message='Header: missing authorization!',
-                                  status_code=401)
-        with Session.begin() as session:
-            user = get_user_by_id(session, data.get('user_id'))
-            if not user:
-                return error_response(message='User does not exist!',
-                                      status_code=404)
-            user_id = user.id
-            if user_id != header:
-                return error_response(
-                    message=f'User ID {user_id} and the HeaderID {header} '
-                            f'are not matching!',
-                    status_code=401)
-            key_word = user.key_word
-            session.commit()
         try:
+            data = request.get_json()
+            user_id = int(request.headers.get('user_id'))
+            auth_token = request.headers.get('authorization')
+            with Session.begin() as session:
+                user = get_user_by_id(session, data.get('user_id'))
+                key_word = user.key_word
+                session.commit()
             response = decode_security_token(auth_token, key_word)
-            if response.get('user_id') == header:
+            if response.get('user_id') == user_id:
                 return f(*args, **kwargs)
         except Exception as ex:
             print(ex)
             return error_response(
                 message=f'Authorization error: wrong security-token',
                 status_code=401)
+
     return decorated
